@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Счетчик переворотов</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #000000;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .container {
+            text-align: center;
+            width: 100%;
+            max-width: 400px;
+        }
+        .counter-box {
+            font-size: 120px;
+            font-weight: bold;
+            margin-bottom: 40px;
+            font-variant-numeric: tabular-nums;
+        }
+        button {
+            background-color: #222222;
+            color: #ff3b30;
+            border: 2px solid #ff3b30;
+            padding: 15px 40px;
+            font-size: 20px;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            width: 80%;
+            transition: all 0.2s ease;
+        }
+        button:active {
+            background-color: #ff3b30;
+            color: #ffffff;
+        }
+        /* Стили для кнопки запроса прав (специфика iOS) */
+        .permission-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #000000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .permission-btn {
+            background-color: #007aff;
+            color: white;
+            border: none;
+            padding: 20px 30px;
+            font-size: 22px;
+            border-radius: 16px;
+            width: 85%;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Окно запроса доступа к датчикам для iPhone -->
+    <div id="permissionOverlay" class="permission-overlay">
+        <button class="permission-btn" onclick="requestPermission()">Включить датчики движения</button>
+    </div>
+
+    <!-- Основной интерфейс приложения -->
+    <div class="container">
+        <div class="counter-box" id="counter">0</div>
+        <button onclick="resetCounter()">Сброс</button>
+    </div>
+
+    <script>
+        let count = 0;
+        const counterElement = document.getElementById('counter');
+        const permissionOverlay = document.getElementById('permissionOverlay');
+
+        // Логика состояний: 
+        // "up" — телефон лежит экраном вверх, "down" — экраном вниз, "unknown" — промежуточное состояние
+        let lastPosition = "unknown"; 
+
+        // Порог для определения горизонтального положения (ускорение свободного падения ~9.8)
+        // Берем с запасом (от 8.5), чтобы срабатывало, даже если рука немного дрожит
+        const THRESHOLD = 8.5; 
+
+        // Функция сброса
+        function resetCounter() {
+            count = 0;
+            counterElement.textContent = count;
+            lastPosition = "unknown"; // Сбрасываем и состояние
+        }
+
+        // Запрос разрешения на доступ к акселерометру (требование iOS 13+)
+        function requestPermission() {
+            if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+                DeviceMotionEvent.requestPermission()
+                    .then(response => {
+                        if (response === 'granted') {
+                            startTracking();
+                        } else {
+                            alert("Без доступа к датчикам приложение не сможет считать подъемы.");
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                // Для браузеров, где разрешение не требуется (например, старые iOS или Android)
+                startTracking();
+            }
+        }
+
+        function startTracking() {
+            // Прячем оверлей с кнопкой активации датчиков
+            permissionOverlay.style.display = 'none';
+
+            window.addEventListener('devicemotion', (event) => {
+                const acc = event.accelerationIncludingGravity;
+                if (!acc) return;
+
+                const z = acc.z;
+
+                // Проверяем: экран строго вверх (Z около +9.8)
+                if (z > THRESHOLD) {
+                    if (lastPosition === "down") {
+                        count++;
+                        counterElement.textContent = count;
+                    }
+                    lastPosition = "up";
+                } 
+                // Проверяем: экран строго вниз (Z около -9.8)
+                if (z < -THRESHOLD) {
+                    if (lastPosition === "up") {
+                        count++;
+                        counterElement.textContent = count;
+                    }
+                    lastPosition = "down";
+                }
+            });
+        }
+
+        // Если это не iPhone или старая версия, где запрос не нужен, сразу пробуем запустить
+        if (typeof DeviceMotionEvent === 'undefined' || typeof DeviceMotionEvent.requestPermission !== 'function') {
+            startTracking();
+        }
+    </script>
+</body>
+</html>
